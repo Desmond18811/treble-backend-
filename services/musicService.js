@@ -14,6 +14,14 @@ export const searchTracks = async (query, provider = 'all') => {
             promises.push(searchDeezer(query));
         }
 
+        if (provider === 'musicbrainz' || provider === 'all') {
+            promises.push(searchMusicBrainz(query));
+        }
+
+        if (provider === 'itunes' || provider === 'all') {
+            promises.push(searchItunes(query));
+        }
+
         const results = await Promise.allSettled(promises);
 
         // Flatten results and filter out failed requests
@@ -79,6 +87,63 @@ const searchDeezer = async (query) => {
         }));
     } catch (error) {
         console.error('Deezer search error:', error.message);
+        return [];
+    }
+};
+
+const searchMusicBrainz = async (query) => {
+    try {
+        const response = await axios.get('https://musicbrainz.org/ws/2/recording', {
+            params: {
+                query: query,
+                fmt: 'json',
+                limit: 10
+            },
+            headers: {
+                'User-Agent': 'TrebbleApp/1.0.0 ( contact@trebble.com )'
+            }
+        });
+
+        return response.data.recordings.map(track => ({
+            trackId: `mb-${track.id}`,
+            trackName: track.title,
+            artistName: track['artist-credit']?.[0]?.name || 'Unknown Artist',
+            collectionName: track.releases?.[0]?.title || 'Unknown Album',
+            artworkUrl100: null, // MusicBrainz doesn't provide art directly in search
+            previewUrl: null, // No audio
+            releaseDate: track.releases?.[0]?.date,
+            primaryGenreName: 'Music',
+            provider: 'musicbrainz'
+        }));
+    } catch (error) {
+        console.error('MusicBrainz search error:', error.message);
+        return [];
+    }
+};
+
+const searchItunes = async (query) => {
+    try {
+        const response = await axios.get('https://itunes.apple.com/search', {
+            params: {
+                term: query,
+                media: 'music',
+                limit: 10
+            }
+        });
+
+        return response.data.results.map(track => ({
+            trackId: `itunes-${track.trackId}`,
+            trackName: track.trackName,
+            artistName: track.artistName,
+            collectionName: track.collectionName,
+            artworkUrl100: track.artworkUrl100,
+            previewUrl: track.previewUrl,
+            releaseDate: track.releaseDate,
+            primaryGenreName: track.primaryGenreName,
+            provider: 'itunes'
+        }));
+    } catch (error) {
+        console.error('iTunes search error:', error.message);
         return [];
     }
 };
